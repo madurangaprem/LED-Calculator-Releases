@@ -159,6 +159,12 @@
   footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
   .status { font-size: 13px; color: var(--muted); }
+  .video-frame {
+    border-radius: 18px; overflow: hidden; border: 1px solid var(--line);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(56, 189, 248, 0.08);
+    background: #050b16; aspect-ratio: 16 / 9;
+  }
+  .video-frame video { width: 100%; height: 100%; display: block; background: #050b16; }
   @media (max-width: 860px) {
     .hero-grid, .steps { grid-template-columns: 1fr; }
     .features { grid-template-columns: 1fr 1fr; }
@@ -178,6 +184,7 @@
       <span>LED Wall Calculator<small>ALLIANCE EVENTS · AV PRODUCTION</small></span>
     </a>
     <div class="navlinks">
+      <a href="#demo">Demo</a>
       <a href="#features">Features</a>
       <a href="#downloads">Downloads</a>
       <a href="#install">Install help</a>
@@ -209,6 +216,17 @@
     </div>
   </div>
 </header>
+
+<section id="demo" style="padding-top:24px">
+  <div class="wrap">
+    <div class="section-head">
+      <div><h2>See it in action</h2><p>90-second tour: a 12-screen LED set, pixel maps, processor wiring and the power plan.</p></div>
+    </div>
+    <div class="video-frame">
+      <video id="demo-video" controls playsinline preload="metadata"></video>
+    </div>
+  </div>
+</section>
 
 <section id="features">
   <div class="wrap">
@@ -271,7 +289,7 @@
         <h3>macOS</h3>
         <ol>
           <li>Choose <b>Apple Silicon (arm64)</b> for M-series Macs or <b>Intel (x64)</b> for older Macs.</li>
-          <li>Open the ZIP and drag the app into <b>Applications</b>, replacing the old one.</li>
+          <li>Open the <b>.dmg</b> (or ZIP for older versions) and drag the app onto the <b>Applications</b> folder, replacing the old one.</li>
           <li>If macOS blocks the first launch, go to <b>System Settings → Privacy &amp; Security → Open Anyway</b>.</li>
           <li>Launch it from Applications, not from Downloads.</li>
         </ol>
@@ -333,9 +351,10 @@
     const n = name.toLowerCase();
     if (n.includes("portable")) return { kind: "win", title: "Windows portable", sub: "No install needed", bg: "rgba(56,189,248,.14)", fg: "#38bdf8", rank: 2 };
     if (n.endsWith(".exe")) return { kind: "win", title: "Windows installer", sub: "Windows 10 / 11 · 64-bit", bg: "rgba(56,189,248,.14)", fg: "#38bdf8", rank: 1 };
-    if (n.includes("arm64")) return { kind: "mac", title: "Mac · Apple Silicon", sub: "M1 – M4 Macs", bg: "rgba(236,72,153,.14)", fg: "#f472b6", rank: 3 };
+    if (n.includes("arm64")) return { kind: "mac", title: "Mac · Apple Silicon", sub: n.endsWith(".dmg") ? "M1 – M4 Macs · installer" : "M1 – M4 Macs", bg: "rgba(236,72,153,.14)", fg: "#f472b6", rank: 3 };
+    if (n.includes("mac") && n.includes("x64")) return { kind: "mac", title: "Mac · Intel", sub: n.endsWith(".dmg") ? "Intel Macs · installer" : "Intel-based Macs", bg: "rgba(139,92,246,.14)", fg: "#a78bfa", rank: 4 };
     if (n.includes("universal") || n.endsWith(".dmg")) return { kind: "mac", title: "Mac · Universal", sub: "Apple Silicon & Intel", bg: "rgba(236,72,153,.14)", fg: "#f472b6", rank: 3 };
-    if (n.includes("mac") && n.includes("x64")) return { kind: "mac", title: "Mac · Intel", sub: "Intel-based Macs", bg: "rgba(139,92,246,.14)", fg: "#a78bfa", rank: 4 };
+    if (n.endsWith(".mp4")) return null;
     if (n.endsWith(".txt") || n.endsWith(".pdf") || n.endsWith(".md")) return { kind: "doc", title: "Installation guide", sub: "Read before upgrading", bg: "rgba(245,158,11,.14)", fg: "#f59e0b", rank: 9 };
     return null; // hide metadata such as latest.yml / blockmaps
   }
@@ -394,6 +413,21 @@
       .filter((l) => /^[-*•]\s+/.test(l)).map((l) => l.replace(/^[-*•]\s+/, "")).slice(0, 8);
   }
 
+  let demoFromRelease = null;
+  // The demo plays from a release attachment (.mp4) when there is one,
+  // otherwise from demo.mp4 next to this page. Hidden if neither exists.
+  function setDemo() {
+    const video = document.getElementById("demo-video");
+    const sources = [demoFromRelease, "demo.mp4"].filter(Boolean);
+    let i = 0;
+    video.onerror = () => {
+      i += 1;
+      if (i < sources.length) { video.src = sources[i]; video.load(); }
+      else document.getElementById("demo").style.display = "none";
+    };
+    video.src = sources[0];
+  }
+
   async function load() {
     render(FALLBACK, false);
     try {
@@ -408,10 +442,16 @@
           date: r.published_at || r.created_at,
           notes: notesFromBody(r.body),
           assets: r.assets.map((a) => ({ name: a.name, size: a.size, url: a.browser_download_url })),
-        }))
+        }));
+      for (const r of data) {
+        const v = (r.assets || []).find((a) => /\.mp4$/i.test(a.name));
+        if (v && !demoFromRelease) demoFromRelease = v.browser_download_url;
+      }
+      const shown = releases
         .filter((r) => r.assets.some((a) => describe(a.name)));
-      if (releases.length) render(releases, true);
+      if (shown.length) render(shown, true);
     } catch (e) { /* offline or blocked: keep the built-in list */ }
+    setDemo();
   }
 
   // Decorative LED wall in power-circuit colours.
